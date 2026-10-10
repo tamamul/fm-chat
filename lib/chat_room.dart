@@ -74,6 +74,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     Api.writeCache(_cacheKey, _msgs.length > 50 ? _msgs.sublist(_msgs.length - 50) : _msgs);
   }
 
+  // Tandai pesan saya dengan id <= upto sebagai sudah dibaca
+  // (chat pribadi: oleh lawan bicara, grup: oleh semua anggota lain).
+  void _tandaiDibaca(int upto) {
+    if (upto <= 0) return;
+    for (final m in _msgs) {
+      if (m['mine'] == true && (m['id'] as int) <= upto) m['dibaca'] = true;
+    }
+  }
+
   Future<void> _loadFull() async {
     try {
       final data = await Api.getJson(_base);
@@ -81,6 +90,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       if (!mounted) return;
       setState(() {
         _msgs = list;
+        _tandaiDibaca((data['read_upto'] ?? 0) as int);
         _loading = false;
         _error = null;
       });
@@ -123,10 +133,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             m['body'] = '';
             m['file'] = null;
           }
-          if (!widget.grup && m['mine'] == true && id <= dibacaSampai) {
-            m['dibaca'] = true;
-          }
         }
+        _tandaiDibaca(dibacaSampai);
       });
       _simpanCache();
     } catch (_) {
@@ -387,7 +395,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     Widget? centang;
     if (m['pending'] == true) {
       centang = const Icon(Icons.access_time, size: 14, color: Colors.black45);
-    } else if (mine && !widget.grup) {
+    } else if (mine) {
       centang = m['dibaca'] == true
           ? const Icon(Icons.done_all, size: 14, color: Color(0xFF0B7A9E))
           : const Icon(Icons.done, size: 14, color: Colors.black45);
