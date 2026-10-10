@@ -19,6 +19,7 @@ class _ChatListPageState extends State<ChatListPage> {
   @override
   void initState() {
     super.initState();
+    _muatDariCache();
     _load();
     _timer = Timer.periodic(const Duration(seconds: 10), (_) => _load(silent: true));
   }
@@ -29,8 +30,18 @@ class _ChatListPageState extends State<ChatListPage> {
     super.dispose();
   }
 
+  Future<void> _muatDariCache() async {
+    final c = await Api.readCache('chats');
+    if (c is List && mounted && _items.isEmpty) {
+      setState(() {
+        _items = c;
+        _loading = false;
+      });
+    }
+  }
+
   Future<void> _load({bool silent = false}) async {
-    if (!silent) {
+    if (!silent && _items.isEmpty) {
       setState(() {
         _loading = true;
         _error = null;
@@ -38,16 +49,22 @@ class _ChatListPageState extends State<ChatListPage> {
     }
     try {
       final data = await Api.getJson('/chats');
+      Api.writeCache('chats', data);
       if (mounted) {
         setState(() {
           _items = data as List;
           _error = null;
+          _loading = false;
         });
       }
     } catch (e) {
-      if (mounted && !silent) setState(() => _error = e.toString());
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          if (_items.isEmpty) _error = e.toString();
+        });
+      }
     }
-    if (mounted && !silent) setState(() => _loading = false);
   }
 
   Color _warna(String s) {
