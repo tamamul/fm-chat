@@ -13,5 +13,6 @@ dependencies:
   file_picker: ^13.1.0
   open_filex: ^4.5.0
   path_provider: ^2.1.4
+  receive_sharing_intent: any
 flutter:
   uses-material-design: true
