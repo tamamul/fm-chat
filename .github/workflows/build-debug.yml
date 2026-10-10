@@ -88,10 +88,13 @@ jobs:
           with open(p, encoding='utf-8') as f:
               s = f.read()
 
-          permissions = [
+                    permissions = [
               'android.permission.INTERNET',
               'android.permission.RECORD_AUDIO',
           ]
+
+          if '<application' not in s:
+              raise SystemExit("Tag <application> tidak ditemukan")
 
           for permission in permissions:
               tag = f'<uses-permission android:name="{permission}"/>'
