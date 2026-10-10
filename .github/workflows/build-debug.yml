@@ -33,6 +33,23 @@ jobs:
         run: flutter pub get
 
       
+      - name: Cek konfigurasi Android SDK
+        run: |
+          echo "=== File Gradle ==="
+          find android -maxdepth 4 -type f \( -name '*.gradle' -o -name '*.gradle.kts' -o -name 'gradle-wrapper.properties' \)
+
+          echo "=== Versi compileSdk ==="
+          grep -R -n 'compileSdk' android
+
+          echo "=== Paket Android SDK tersedia ==="
+          SDKMANAGER="$(find /usr/local/lib/android/sdk/cmdline-tools -type f -name sdkmanager 2>/dev/null | head -n 1)"
+
+          if [ -n "$SDKMANAGER" ]; then
+            "$SDKMANAGER" --list | grep -E 'platforms;android-37|platforms;android-36' || true
+          else
+            echo "sdkmanager tidak ditemukan"
+          fi
+
       
       - name: Buat folder android
         run: |
