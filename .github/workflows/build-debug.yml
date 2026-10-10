@@ -81,29 +81,29 @@ jobs:
           "$SDKMANAGER" "platforms;android-37.0"
 
       - name: Atur manifest
-              - name: Configure Android Manifest
+      
+      - name: Configure Android Manifest
         run: |
           python3 - <<'PY'
+          import re
+
           p = 'android/app/src/main/AndroidManifest.xml'
+
           with open(p, encoding='utf-8') as f:
               s = f.read()
-
-                    permissions = [
-              'android.permission.INTERNET',
-              'android.permission.RECORD_AUDIO',
-          ]
 
           if '<application' not in s:
               raise SystemExit("Tag <application> tidak ditemukan")
 
+          permissions = [
+              'android.permission.INTERNET',
+              'android.permission.RECORD_AUDIO',
+          ]
+
           for permission in permissions:
-              tag = f'<uses-permission android:name="{permission}"/>'
               if permission not in s:
-                  s = s.replace(
-                      '<application',
-                      f'{tag}\n    <application',
-                      1
-                  )
+                  tag = f'<uses-permission android:name="{permission}"/>'
+                  s = s.replace('<application', tag + '\n    <application', 1)
 
           s = s.replace(
               'android:launchMode="singleTop"',
@@ -111,16 +111,27 @@ jobs:
           )
 
           with open('android-intent-filters.xml', encoding='utf-8') as f:
-              filters = f.read()
+              filters = f.read().strip()
+
+          if not filters:
+              raise SystemExit("File intent filters kosong")
 
           if '</activity>' not in s:
               raise SystemExit("Tag </activity> tidak ditemukan")
 
-          s = s.replace('</activity>', filters + '\n        </activity>', 1)
+          if filters not in s:
+              s = s.replace(
+                  '</activity>',
+                  filters + '\n        </activity>',
+                  1
+              )
 
           with open(p, 'w', encoding='utf-8') as f:
               f.write(s)
+
+          print("AndroidManifest.xml berhasil diperbarui")
           PY
+
 
       - name: Ambil dependensi Flutter
         run: flutter pub get
