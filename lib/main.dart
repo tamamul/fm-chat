@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'api.dart';
 import 'chat_list.dart';
+import 'share_page.dart';
 
 void main() => runApp(const FmChatApp());
 
@@ -159,11 +162,44 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
   final VoidCallback onLogout;
   const HomePage({super.key, required this.user, required this.onLogout});
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  StreamSubscription<List<SharedMediaFile>>? _sub;
 
   @override
-  Widget build(BuildContext context) => ChatListPage(user: user, onLogout: onLogout);
+  void initState() {
+    super.initState();
+    // Aplikasi sedang terbuka lalu ada file dibagikan.
+    _sub = ReceiveSharingIntent.instance.getMediaStream().listen(_diterima, onError: (_) {});
+    // Aplikasi tertutup lalu dibuka lewat menu Bagikan.
+    ReceiveSharingIntent.instance.getInitialMedia().then((value) {
+      _diterima(value);
+      ReceiveSharingIntent.instance.reset();
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  void _diterima(List<SharedMediaFile> files) {
+    if (files.isEmpty || !mounted) return;
+    final items = files.map((f) => SharedItem.dariPath(f.path)).toList();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => SharePage(items: items)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ChatListPage(user: widget.user, onLogout: widget.onLogout);
 }
