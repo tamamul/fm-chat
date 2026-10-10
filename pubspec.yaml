@@ -14,5 +14,7 @@ dependencies:
   open_filex: ^4.5.0
   path_provider: ^2.1.4
   receive_sharing_intent: any
+  record: any
+  audioplayers: ^6.5.1
 flutter:
   uses-material-design: true
