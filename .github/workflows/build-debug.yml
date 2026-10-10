@@ -1,7 +1,5 @@
 name: Build APK
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 jobs:
   build:
@@ -20,16 +18,6 @@ jobs:
         run: |
           flutter create --org id.marsa9 --project-name fmchat --platforms android /tmp/scaffold
           cp -r /tmp/scaffold/android ./android
-      - name: Set compileSdk 36
-    run: |
-      if [ -f android/app/build.gradle.kts ]; then
-        sed -i 's/compileSdk = [0-9]*/compileSdk = 36/' android/app/build.gradle.kts
-      elif [ -f android/app/build.gradle ]; then
-        sed -i -E 's/compileSdkVersion [0-9]+/compileSdkVersion 36/; s/compileSdk [0-9]+/compileSdk 36/' android/app/build.gradle
-      else
-        echo "File Gradle Android tidak ditemukan"
-        exit 1
-      fi
       - name: Izin internet
         run: |
           f=android/app/src/main/AndroidManifest.xml
