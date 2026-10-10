@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'api.dart';
 
 class ChatRoomPage extends StatefulWidget {
@@ -207,19 +209,41 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
+  // Pakai jalur file lokal bila ada; kalau tidak, salin dulu ke folder sementara.
+  Future<String?> _lokalPath(PlatformFile f) async {
+    final p = f.path;
+    if (p != null && p.isNotEmpty && !p.startsWith('content:')) return p;
+    try {
+      final dir = await getTemporaryDirectory();
+      final tmp = File('${dir.path}/up_${DateTime.now().millisecondsSinceEpoch}_${f.name}');
+      await f.readAsByteStream().cast<List<int>>().pipe(tmp.openWrite());
+      return tmp.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _kirimFile() async {
-    final res = await FilePicker.platform.pickFiles(allowMultiple: false);
-    if (res == null || res.files.isEmpty) return;
-    final f = res.files.first;
-    final path = f.path;
+    PlatformFile? f;
+    try {
+      f = await FilePicker.pickFile();
+    } catch (e) {
+      _snack('Tidak bisa membuka pemilih file.');
+      return;
+    }
+    if (f == null) return;
+    final bytes = await f.length() ?? 0;
+    if (bytes > 100 * 1024 * 1024) {
+      _snack('Ukuran file maksimal 100 MB.');
+      return;
+    }
+    final path = await _lokalPath(f);
     if (path == null) {
       _snack('File tidak bisa dibaca.');
       return;
     }
-    if (f.size > 100 * 1024 * 1024) {
-      _snack('Ukuran file maksimal 100 MB.');
-      return;
-    }
+    final salinan = path != f.path;
+    final nama = f.name;
     final caption = _input.text.trim();
     final reply = _replyTo;
     final temp = <String, dynamic>{
@@ -233,7 +257,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           : {'id': reply['id'], 'nama': _namaPengirim(reply), 'cuplikan': _cuplikan(reply)},
       'dihapus': false,
       'hari': 'Hari ini',
-      'file': {'name': f.name, 'size': _ukuran(f.size), 'url': ''},
+      'file': {'name': nama, 'size': _ukuran(bytes), 'url': ''},
       'pending': true,
     };
     setState(() {
@@ -242,7 +266,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       _input.clear();
     });
     try {
-      await Api.uploadFile(_sendPath, path, f.name,
+      await Api.uploadFile(_sendPath, path, nama,
           caption: caption, replyTo: reply == null ? null : reply['id'] as int);
       await _poll(tunggu: true);
       if (mounted) setState(() => _pending.remove(temp));
@@ -255,6 +279,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         });
       }
       _snack('Gagal mengirim file: $e');
+    } finally {
+      if (salinan) {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
     }
   }
 
