@@ -82,18 +82,26 @@ jobs:
           "$SDKMANAGER" "platforms;android-37.0"
 
       - name: Atur manifest
+              - name: Configure Android Manifest
         run: |
           python3 - <<'PY'
           p = 'android/app/src/main/AndroidManifest.xml'
           with open(p, encoding='utf-8') as f:
               s = f.read()
 
-          if 'android.permission.INTERNET' not in s:
-              s = s.replace(
-                  '<application',
-                  '<uses-permission android:name="android.permission.INTERNET"/>\n    <application',
-                  1
-              )
+          permissions = [
+              'android.permission.INTERNET',
+              'android.permission.RECORD_AUDIO',
+          ]
+
+          for permission in permissions:
+              tag = f'<uses-permission android:name="{permission}"/>'
+              if permission not in s:
+                  s = s.replace(
+                      '<application',
+                      f'{tag}\n    <application',
+                      1
+                  )
 
           s = s.replace(
               'android:launchMode="singleTop"',
