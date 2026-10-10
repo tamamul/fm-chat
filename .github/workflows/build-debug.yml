@@ -1,65 +1,125 @@
+
 name: Build APK
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      
+
       - name: Buat folder android
         run: |
           flutter create --org id.marsa9 --project-name fmchat --platforms android /tmp/scaffold
           cp -r /tmp/scaffold/android ./android
-          find android -maxdepth 3 -type f
-          grep -R -n 'compileSdk' android
-      
-      
+
+      - name: Atur Android Gradle dan compileSdk
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          p = Path("android/settings.gradle.kts")
+          s = p.read_text()
+          s, n = re.subn(
+              r'(id\(["\']com\.android\.application["\']\)\s+version\s+["\'])[^"\']+',
+              r'\g<1>9.1.1',
+              s,
+              count=1
+          )
+          if n == 0:
+              raise SystemExit("Versi AGP tidak ditemukan di settings.gradle.kts")
+          p.write_text(s)
+
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          s, n = re.subn(
+              r'compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)',
+              'compileSdk = 37',
+              s,
+              count=1
+          )
+          if n == 0:
+              raise SystemExit("compileSdk tidak ditemukan")
+          p.write_text(s)
+
+          p = Path("android/gradle/wrapper/gradle-wrapper.properties")
+          s = p.read_text()
+          s, n = re.subn(
+              r'gradle-[0-9.]+-(?:all|bin)\.zip',
+              'gradle-9.3.1-bin.zip',
+              s,
+              count=1
+          )
+          if n == 0:
+              raise SystemExit("Gradle wrapper URL tidak ditemukan")
+          p.write_text(s)
+
+          print("AGP 9.1.1, Gradle 9.3.1, compileSdk 37")
+          PY
+
       - name: Install Android SDK Platform 37
         run: |
-          SDKMANAGER="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find /usr/local/lib/android/sdk/cmdline-tools -type f -name sdkmanager 2>/dev/null | head -n 1)"
-          fi
-
-          if [ ! -x "$SDKMANAGER" ]; then
+          SDKMANAGER="$(find /usr/local/lib/android/sdk/cmdline-tools -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
             echo "sdkmanager tidak ditemukan"
-            find /usr/local/lib/android/sdk -type f -name sdkmanager
             exit 1
           fi
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platforms;android-37.0"
 
-          yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" "platforms;android-37"
-
-
-
-      - name: Atur manifest (izin internet dan menu Bagikan)
+      - name: Atur manifest
         run: |
           python3 - <<'PY'
           p = 'android/app/src/main/AndroidManifest.xml'
-          s = open(p, encoding='utf-8').read()
+          with open(p, encoding='utf-8') as f:
+              s = f.read()
+
           if 'android.permission.INTERNET' not in s:
-              s = s.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
-          s = s.replace('android:launchMode="singleTop"', 'android:launchMode="singleTask"')
-          filters = open('android-intent-filters.xml', encoding='utf-8').read()
-          assert '</activity>' in s
+              s = s.replace(
+                  '<application',
+                  '<uses-permission android:name="android.permission.INTERNET"/>\n    <application',
+                  1
+              )
+
+          s = s.replace(
+              'android:launchMode="singleTop"',
+              'android:launchMode="singleTask"'
+          )
+
+          with open('android-intent-filters.xml', encoding='utf-8') as f:
+              filters = f.read()
+
+          if '</activity>' not in s:
+              raise SystemExit("Tag </activity> tidak ditemukan")
+
           s = s.replace('</activity>', filters + '\n        </activity>', 1)
-          open(p, 'w', encoding='utf-8').write(s)
-          print(s)
+
+          with open(p, 'w', encoding='utf-8') as f:
+              f.write(s)
           PY
-      - run: flutter pub get
-      - run: flutter build apk --release --split-per-abi
+
+      - name: Ambil dependensi Flutter
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --split-per-abi
+
       - uses: actions/upload-artifact@v4
         with:
           name: fmchat-apk
