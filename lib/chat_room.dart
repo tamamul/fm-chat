@@ -543,4 +543,31 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   hintText: 'Tulis pesan',
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal:
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            IconButton.filled(onPressed: _send, icon: const Icon(Icons.send)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFEEF4F8),
+      appBar: AppBar(title: Text(widget.nama)),
+      body: Column(children: [
+        Expanded(child: _list()),
+        _inputBar(),
+      ]),
+    );
+  }
+}
