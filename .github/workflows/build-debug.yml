@@ -14,6 +14,11 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36"
       - name: Buat folder android
         run: |
           flutter create --org id.marsa9 --project-name fmchat --platforms android /tmp/scaffold
