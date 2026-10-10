@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'chat_room.dart';
 
 class ChatListPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -78,6 +79,45 @@ class _ChatListPageState extends State<ChatListPage> {
     ).toColor();
   }
 
+  Future<void> _buka(bool grup, int id, String nama) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ChatRoomPage(grup: grup, id: id, nama: nama)),
+    );
+    _load(silent: true);
+  }
+
+  Future<void> _chatBaru() async {
+    List<dynamic> users;
+    try {
+      users = await Api.getJson('/pengguna') as List;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      return;
+    }
+    if (!mounted) return;
+    final pilih = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('Mulai chat dengan', style: TextStyle(fontWeight: FontWeight.bold))),
+            ...users.map((u) => ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.person)),
+                  title: Text(u['name'].toString()),
+                  subtitle: Text(u['role'].toString()),
+                  onTap: () => Navigator.pop(ctx, Map<String, dynamic>.from(u)),
+                )),
+          ],
+        ),
+      ),
+    );
+    if (pilih == null || !mounted) return;
+    await _buka(false, (pilih['id'] as num).toInt(), pilih['name'].toString());
+  }
+
   Widget _body() {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
@@ -104,11 +144,12 @@ class _ChatListPageState extends State<ChatListPage> {
                 final it = _items[i] as Map<String, dynamic>;
                 final nama = (it['nama'] ?? '').toString();
                 final belum = (it['belum'] ?? 0) as int;
+                final grup = it['grup'] == true;
                 return ListTile(
                   leading: CircleAvatar(
                     backgroundColor: _warna((it['warna'] ?? '').toString()),
                     foregroundColor: Colors.white,
-                    child: it['grup'] == true
+                    child: grup
                         ? const Icon(Icons.group)
                         : Text(nama.isEmpty ? '?' : nama[0].toUpperCase()),
                   ),
@@ -134,9 +175,7 @@ class _ChatListPageState extends State<ChatListPage> {
                         ),
                     ],
                   ),
-                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Ruang obrolan menyusul di langkah 3.')),
-                  ),
+                  onTap: () => _buka(grup, (it['id'] as num).toInt(), nama),
                 );
               },
             ),
@@ -150,6 +189,10 @@ class _ChatListPageState extends State<ChatListPage> {
         TextButton(onPressed: widget.onLogout, child: const Text('Keluar')),
       ]),
       body: _body(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _chatBaru,
+        child: const Icon(Icons.edit),
+      ),
     );
   }
 }
