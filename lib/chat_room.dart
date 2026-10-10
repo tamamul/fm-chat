@@ -4,7 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'api.dart';
+import 'voice.dart';
 
 class ChatRoomPage extends StatefulWidget {
   final bool grup;
@@ -17,14 +19,18 @@ class ChatRoomPage extends StatefulWidget {
 
 class _ChatRoomPageState extends State<ChatRoomPage> {
   final _input = TextEditingController();
+  final AudioRecorder _rec = AudioRecorder();
   List<Map<String, dynamic>> _msgs = [];
   final List<Map<String, dynamic>> _pending = [];
   Map<String, dynamic>? _replyTo;
   bool _loading = true;
   String? _error;
   Timer? _timer;
+  Timer? _rekamTimer;
   bool _polling = false;
   bool _membuka = false;
+  bool _merekam = false;
+  int _detikRekam = 0;
   int _tempId = 0;
 
   String get _base => widget.grup ? '/grup/${widget.id}' : '/obrolan/${widget.id}';
@@ -53,7 +59,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _rekamTimer?.cancel();
     _input.dispose();
+    VoiceHub.stop();
+    if (_merekam) {
+      _rec.cancel().whenComplete(_rec.dispose);
+    } else {
+      _rec.dispose();
+    }
     super.dispose();
   }
 
@@ -148,6 +161,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final f = m['file'];
     if (f is Map) {
       final nama = f['name'].toString();
+      if (VoiceNote.detik(nama) != null) return '\u{1F3A4} Pesan suara';
       return '\u{1F4CE} $nama';
     }
     final b = (m['body'] ?? '').toString().replaceAll('\n', ' ');
@@ -165,6 +179,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final j = n.hour.toString().padLeft(2, '0');
     final mnt = n.minute.toString().padLeft(2, '0');
     return '$j:$mnt';
+  }
+
+  String _stamp() {
+    final n = DateTime.now();
+    String d2(int v) => v.toString().padLeft(2, '0');
+    return '${n.year}${d2(n.month)}${d2(n.day)}_${d2(n.hour)}${d2(n.minute)}${d2(n.second)}';
   }
 
   String _ukuran(int b) {
@@ -250,8 +270,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       _snack('File tidak bisa dibaca.');
       return;
     }
-    final salinan = path != f.path;
-    final nama = f.name;
+    await _kirimBerkas(path, f.name, bytes, hapusSetelah: path != f.path);
+  }
+
+  // Kirim satu file (dari pemilih file atau rekaman suara) dengan gelembung "mengirim".
+  Future<void> _kirimBerkas(String path, String nama, int bytes, {bool hapusSetelah = false}) async {
     final caption = _input.text.trim();
     final reply = _replyTo;
     final temp = <String, dynamic>{
@@ -286,14 +309,70 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           _replyTo = reply;
         });
       }
-      _snack('Gagal mengirim file: $e');
+      _snack('Gagal mengirim: $e');
     } finally {
-      if (salinan) {
+      if (hapusSetelah) {
         try {
           await File(path).delete();
         } catch (_) {}
       }
     }
+  }
+
+  Future<void> _mulaiRekam() async {
+    if (_merekam) return;
+    try {
+      if (!await _rec.hasPermission()) {
+        _snack('Izin mikrofon ditolak. Aktifkan di pengaturan HP.');
+        return;
+      }
+      await VoiceHub.stop();
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _rec.start(const RecordConfig(), path: path);
+      _detikRekam = 0;
+      _rekamTimer?.cancel();
+      _rekamTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() => _detikRekam++);
+        if (_detikRekam >= 300) _selesaiRekam();
+      });
+      if (mounted) setState(() => _merekam = true);
+    } catch (e) {
+      _snack('Tidak bisa mulai merekam.');
+    }
+  }
+
+  Future<void> _selesaiRekam() async {
+    if (!_merekam) return;
+    _rekamTimer?.cancel();
+    final detik = _detikRekam;
+    setState(() => _merekam = false);
+    String? path;
+    try {
+      path = await _rec.stop();
+    } catch (_) {}
+    if (path == null) {
+      _snack('Rekaman gagal.');
+      return;
+    }
+    if (detik < 1) {
+      try {
+        await File(path).delete();
+      } catch (_) {}
+      _snack('Rekaman terlalu pendek.');
+      return;
+    }
+    final bytes = await File(path).length();
+    await _kirimBerkas(path, 'suara_${_stamp()}_${detik}s.m4a', bytes, hapusSetelah: true);
+  }
+
+  Future<void> _batalRekam() async {
+    _rekamTimer?.cancel();
+    if (mounted) setState(() => _merekam = false);
+    try {
+      await _rec.cancel();
+    } catch (_) {}
   }
 
   Future<void> _bukaFile(Map file) async {
@@ -385,6 +464,41 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     return rows.reversed.toList();
   }
 
+  Widget _lampiran(Map file) {
+    final nama = file['name'].toString();
+    final detik = VoiceNote.detik(nama);
+    if (detik != null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: VoiceTile(url: (file['url'] ?? '').toString(), nama: nama, detik: detik),
+      );
+    }
+    return GestureDetector(
+      onTap: () => _bukaFile(file),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0x0F000000),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.insert_drive_file, size: 28),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nama, maxLines: 2, overflow: TextOverflow.ellipsis),
+                Text(file['size'].toString(), style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
   Widget _bubble(Map<String, dynamic> m) {
     final mine = m['mine'] == true;
     final dihapus = m['dihapus'] == true;
@@ -449,32 +563,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 const Text('Pesan dihapus',
                     style: TextStyle(fontStyle: FontStyle.italic, color: Colors.black54))
               else ...[
-                if (file is Map)
-                  GestureDetector(
-                    onTap: () => _bukaFile(file),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 4),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0x0F000000),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.insert_drive_file, size: 28),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(file['name'].toString(),
-                                  maxLines: 2, overflow: TextOverflow.ellipsis),
-                              Text(file['size'].toString(), style: const TextStyle(fontSize: 12)),
-                            ],
-                          ),
-                        ),
-                      ]),
-                    ),
-                  ),
+                if (file is Map) _lampiran(file),
                 if (body.isNotEmpty) Text(body),
               ],
               Align(
@@ -540,6 +629,28 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     );
   }
 
+  Widget _barRekam() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 8, 8),
+      child: Row(children: [
+        IconButton(
+          onPressed: _batalRekam,
+          icon: const Icon(Icons.delete_outline, color: Colors.red),
+        ),
+        const Icon(Icons.fiber_manual_record, color: Colors.red, size: 14),
+        const SizedBox(width: 6),
+        Text(VoiceNote.format(_detikRekam), style: const TextStyle(fontSize: 16)),
+        const Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(left: 12),
+            child: Text('Merekam...', style: TextStyle(color: Colors.black54)),
+          ),
+        ),
+        IconButton.filled(onPressed: _selesaiRekam, icon: const Icon(Icons.send)),
+      ]),
+    );
+  }
+
   Widget _inputBar() {
     final reply = _replyTo;
     return SafeArea(
@@ -567,32 +678,40 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               ),
             ]),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 6, 8, 8),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            IconButton(onPressed: _kirimFile, icon: const Icon(Icons.attach_file)),
-            Expanded(
-              child: TextField(
-                controller: _input,
-                minLines: 1,
-                maxLines: 5,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: 'Tulis pesan',
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+        if (_merekam)
+          _barRekam()
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 6, 8, 8),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              IconButton(onPressed: _kirimFile, icon: const Icon(Icons.attach_file)),
+              Expanded(
+                child: TextField(
+                  controller: _input,
+                  minLines: 1,
+                  maxLines: 5,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: 'Tulis pesan',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-            IconButton.filled(onPressed: _send, icon: const Icon(Icons.send)),
-          ]),
-        ),
+              const SizedBox(width: 6),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _input,
+                builder: (context, v, _) => v.text.trim().isEmpty
+                    ? IconButton.filled(onPressed: _mulaiRekam, icon: const Icon(Icons.mic))
+                    : IconButton.filled(onPressed: _send, icon: const Icon(Icons.send)),
+              ),
+            ]),
+          ),
       ]),
     );
   }
