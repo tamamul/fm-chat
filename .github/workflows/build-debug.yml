@@ -23,6 +23,34 @@ jobs:
           cp -r /tmp/scaffold/android ./android
           find android -maxdepth 3 -type f
           grep -R -n 'compileSdk' android
+      
+      - name: Siapkan Android SDK 37
+        run: |
+          sdkmanager "platforms;android-37"
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          p = Path("android/settings.gradle.kts")
+          s = p.read_text()
+          s = re.sub(
+              r'(id\(["\']com\.android\.application["\']\)\s+version\s+["\'])[^"\']+',
+              r'\g<1>9.1.1',
+              s
+          )
+          p.write_text(s)
+
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          s = s.replace(
+              "compileSdk = flutter.compileSdkVersion",
+              "compileSdk = 37"
+          )
+          p.write_text(s)
+
+          print("Konfigurasi Android SDK 37 selesai.")
+          PY
+
 
       - name: Atur manifest (izin internet dan menu Bagikan)
         run: |
