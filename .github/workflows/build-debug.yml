@@ -33,20 +33,45 @@ jobs:
         run: flutter pub get
 
       
+      
       - name: Atur manifest
         run: |
+          set -e
+
+          echo "Memeriksa struktur folder Android..."
+          find android -name AndroidManifest.xml -type f
+
           python3 - <<'PY'
           from pathlib import Path
           import re
+          import xml.etree.ElementTree as ET
 
-          p = Path('android/app/src/main/AndroidManifest.xml')
+          candidates = list(
+              Path('android').rglob('AndroidManifest.xml')
+          )
 
-          if not p.exists():
-              raise SystemExit(f"Manifest tidak ditemukan: {p}")
+          p = next(
+              (
+                  f for f in candidates
+                  if f.as_posix().endswith(
+                      '/src/main/AndroidManifest.xml'
+                  )
+              ),
+              None
+          )
 
+          if p is None:
+              print("Manifest tidak ditemukan.")
+              print("File Android yang tersedia:")
+              for f in Path('android').rglob('*'):
+                  if f.is_file():
+                      print(f)
+              raise SystemExit(1)
+
+          print(f"Menggunakan manifest: {p}")
           s = p.read_text(encoding='utf-8')
 
-          if '<application' not in s:
+          if not re.search(r'<application(?:\s|>)', s):
               raise SystemExit("Tag <application> tidak ditemukan")
 
           permissions = [
@@ -55,12 +80,21 @@ jobs:
           ]
 
           for permission in permissions:
-              if permission not in s:
-                  tag = f'<uses-permission android:name="{permission}"/>'
-                  s = s.replace(
-                      '<application',
+              if not re.search(
+                  r'<uses-permission\b[^>]*android:name=["\']'
+                  + re.escape(permission)
+                  + r'["\']',
+                  s
+              ):
+                  tag = (
+                      f'<uses-permission '
+                      f'android:name="{permission}"/>'
+                  )
+                  s = re.sub(
+                      r'<application(?=[\s>])',
                       tag + '\n    <application',
-                      1
+                      s,
+                      count=1
                   )
 
           s = s.replace(
@@ -72,32 +106,30 @@ jobs:
 
           if not filters_path.exists():
               raise SystemExit(
-                  f"File intent filter tidak ditemukan: {filters_path}"
+                  "android-intent-filters.xml tidak ditemukan"
               )
 
           filters = filters_path.read_text(
               encoding='utf-8'
           ).strip()
 
-          if '</activity>' not in s:
-              raise SystemExit("Tag </activity> tidak ditemukan")
-
           if filters and filters not in s:
+              if '</activity>' not in s:
+                  raise SystemExit("</activity> tidak ditemukan")
               s = s.replace(
                   '</activity>',
                   filters + '\n        </activity>',
                   1
               )
 
+          ET.fromstring(s)
           p.write_text(s, encoding='utf-8')
-
-          import xml.etree.ElementTree as ET
-          ET.parse(p)
 
           print("Manifest valid.")
           print("Izin INTERNET dan RECORD_AUDIO tersedia.")
           print("Intent filter diperiksa.")
           PY
+
 
 
       - name: Build APK
