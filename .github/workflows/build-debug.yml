@@ -32,36 +32,22 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Configure Android Manifest
+      
+      - name: Atur manifest
         run: |
           python3 - <<'PY'
-          import re
           from pathlib import Path
+          import re
 
-          manifest = Path(
-              'android/app/src/main/AndroidManifest.xml'
-          )
-          filters_file = Path('android-intent-filters.xml')
+          p = Path('android/app/src/main/AndroidManifest.xml')
 
-          if not manifest.exists():
-              raise SystemExit(
-                  f"Manifest tidak ditemukan: {manifest}"
-              )
+          if not p.exists():
+              raise SystemExit(f"Manifest tidak ditemukan: {p}")
 
-          if not filters_file.exists():
-              raise SystemExit(
-                  f"File tidak ditemukan: {filters_file}"
-              )
+          s = p.read_text(encoding='utf-8')
 
-          s = manifest.read_text(encoding='utf-8')
-          filters = filters_file.read_text(
-              encoding='utf-8'
-          ).strip()
-
-          if not re.search(r'<application(?:\s|>)', s):
-              raise SystemExit(
-                  "Tag <application> tidak ditemukan"
-              )
+          if '<application' not in s:
+              raise SystemExit("Tag <application> tidak ditemukan")
 
           permissions = [
               'android.permission.INTERNET',
@@ -69,22 +55,12 @@ jobs:
           ]
 
           for permission in permissions:
-              if not re.search(
-                  r'<uses-permission\b[^>]*'
-                  r'android:name=["\']'
-                  + re.escape(permission)
-                  + r'["\']',
-                  s
-              ):
-                  tag = (
-                      f'<uses-permission '
-                      f'android:name="{permission}"/>'
-                  )
-                  s = re.sub(
-                      r'<application(?=[\s>])',
+              if permission not in s:
+                  tag = f'<uses-permission android:name="{permission}"/>'
+                  s = s.replace(
+                      '<application',
                       tag + '\n    <application',
-                      s,
-                      count=1
+                      1
                   )
 
           s = s.replace(
@@ -92,34 +68,37 @@ jobs:
               'android:launchMode="singleTask"'
           )
 
-          if filters:
-              if '</activity>' not in s:
-                  raise SystemExit(
-                      "Tag </activity> tidak ditemukan"
-                  )
+          filters_path = Path('android-intent-filters.xml')
 
-              if filters not in s:
-                  s = s.replace(
-                      '</activity>',
-                      filters + '\n        </activity>',
-                      1
-                  )
+          if not filters_path.exists():
+              raise SystemExit(
+                  f"File intent filter tidak ditemukan: {filters_path}"
+              )
 
-          manifest.write_text(s, encoding='utf-8')
+          filters = filters_path.read_text(
+              encoding='utf-8'
+          ).strip()
 
-          print("Manifest berhasil dikonfigurasi.")
-          print("Izin INTERNET dan RECORD_AUDIO diperiksa.")
-          PY
+          if '</activity>' not in s:
+              raise SystemExit("Tag </activity> tidak ditemukan")
 
-      - name: Validate Android Manifest
-        run: |
-          python3 - <<'PY'
+          if filters and filters not in s:
+              s = s.replace(
+                  '</activity>',
+                  filters + '\n        </activity>',
+                  1
+              )
+
+          p.write_text(s, encoding='utf-8')
+
           import xml.etree.ElementTree as ET
+          ET.parse(p)
 
-          path = 'android/app/src/main/AndroidManifest.xml'
-          ET.parse(path)
-          print("AndroidManifest.xml valid.")
+          print("Manifest valid.")
+          print("Izin INTERNET dan RECORD_AUDIO tersedia.")
+          print("Intent filter diperiksa.")
           PY
+
 
       - name: Build APK
         run: flutter build apk --release
