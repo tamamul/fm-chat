@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'chat_list.dart';
 
 void main() => runApp(const FmChatApp());
 
@@ -147,12 +148,5 @@ class HomePage extends StatelessWidget {
   const HomePage({super.key, required this.user, required this.onLogout});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('FM Chat'), actions: [
-        TextButton(onPressed: onLogout, child: const Text('Keluar')),
-      ]),
-      body: Center(child: Text('Halo, ${user['name']} (${user['role']})')),
-    );
-  }
+  Widget build(BuildContext context) => ChatListPage(user: user, onLogout: onLogout);
 }
