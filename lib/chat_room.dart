@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 import 'api.dart';
 
 class ChatRoomPage extends StatefulWidget {
@@ -20,6 +22,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   String? _error;
   Timer? _timer;
   bool _polling = false;
+  bool _membuka = false;
   int _tempId = 0;
 
   String get _base => widget.grup ? '/grup/${widget.id}' : '/obrolan/${widget.id}';
@@ -154,6 +157,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     return '$j:$mnt';
   }
 
+  String _ukuran(int b) {
+    if (b >= 1048576) return '${(b / 1048576).toStringAsFixed(1)} MB';
+    final kb = (b / 1024).round();
+    return '${kb < 1 ? 1 : kb} KB';
+  }
+
   void _snack(String teks) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(teks)));
@@ -195,6 +204,75 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         });
       }
       _snack('Gagal mengirim: $e');
+    }
+  }
+
+  Future<void> _kirimFile() async {
+    final res = await FilePicker.platform.pickFiles(allowMultiple: false);
+    if (res == null || res.files.isEmpty) return;
+    final f = res.files.first;
+    final path = f.path;
+    if (path == null) {
+      _snack('File tidak bisa dibaca.');
+      return;
+    }
+    if (f.size > 100 * 1024 * 1024) {
+      _snack('Ukuran file maksimal 100 MB.');
+      return;
+    }
+    final caption = _input.text.trim();
+    final reply = _replyTo;
+    final temp = <String, dynamic>{
+      'id': --_tempId,
+      'mine': true,
+      'sender': 'Anda',
+      'body': caption,
+      'time': _jamSekarang(),
+      'balas': reply == null
+          ? null
+          : {'id': reply['id'], 'nama': _namaPengirim(reply), 'cuplikan': _cuplikan(reply)},
+      'dihapus': false,
+      'hari': 'Hari ini',
+      'file': {'name': f.name, 'size': _ukuran(f.size), 'url': ''},
+      'pending': true,
+    };
+    setState(() {
+      _pending.add(temp);
+      _replyTo = null;
+      _input.clear();
+    });
+    try {
+      await Api.uploadFile(_sendPath, path, f.name,
+          caption: caption, replyTo: reply == null ? null : reply['id'] as int);
+      await _poll(tunggu: true);
+      if (mounted) setState(() => _pending.remove(temp));
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _pending.remove(temp);
+          _input.text = caption;
+          _replyTo = reply;
+        });
+      }
+      _snack('Gagal mengirim file: $e');
+    }
+  }
+
+  Future<void> _bukaFile(Map file) async {
+    final url = (file['url'] ?? '').toString();
+    if (url.isEmpty || _membuka) return;
+    _membuka = true;
+    try {
+      _snack('Mengunduh ${file['name']}...');
+      final path = await Api.download(url, file['name'].toString());
+      final r = await OpenFilex.open(path);
+      if (r.type != ResultType.done) {
+        _snack('Tidak ada aplikasi untuk membuka file ini.');
+      }
+    } catch (e) {
+      _snack(e.toString());
+    } finally {
+      _membuka = false;
     }
   }
 
@@ -335,7 +413,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               else ...[
                 if (file is Map)
                   GestureDetector(
-                    onTap: () => _snack('Buka berkas menyusul di langkah 4.'),
+                    onTap: () => _bukaFile(file),
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 4),
                       padding: const EdgeInsets.all(8),
@@ -452,8 +530,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             ]),
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+          padding: const EdgeInsets.fromLTRB(4, 6, 8, 8),
           child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            IconButton(onPressed: _kirimFile, icon: const Icon(Icons.attach_file)),
             Expanded(
               child: TextField(
                 controller: _input,
@@ -464,31 +543,4 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   hintText: 'Tulis pesan',
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            IconButton.filled(onPressed: _send, icon: const Icon(Icons.send)),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFEEF4F8),
-      appBar: AppBar(title: Text(widget.nama)),
-      body: Column(children: [
-        Expanded(child: _list()),
-        _inputBar(),
-      ]),
-    );
-  }
-}
+                  contentPadding: const EdgeInsets.symmetric(horizontal:
