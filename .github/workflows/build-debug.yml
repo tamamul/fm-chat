@@ -16,10 +16,14 @@ jobs:
         with:
           channel: stable
           cache: true
+      
       - name: Buat folder android
         run: |
           flutter create --org id.marsa9 --project-name fmchat --platforms android /tmp/scaffold
           cp -r /tmp/scaffold/android ./android
+          find android -maxdepth 3 -type f
+          grep -R -n 'compileSdk' android
+
       - name: Atur manifest (izin internet dan menu Bagikan)
         run: |
           python3 - <<'PY'
