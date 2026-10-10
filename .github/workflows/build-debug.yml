@@ -34,6 +34,20 @@ jobs:
 
       
       
+      - name: Buat folder android
+        run: |
+          if [ ! -d android ]; then
+            flutter create \
+              --org id.marsa9 \
+              --project-name fmchat \
+              --platforms android \
+              /tmp/scaffold
+
+            cp -r /tmp/scaffold/android ./android
+          fi
+
+          ls -la android/app/src/main/
+
       - name: Atur manifest
         run: |
           set -e
