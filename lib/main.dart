@@ -38,11 +38,28 @@ class _GateState extends State<Gate> {
     });
     try {
       await Api.loadToken();
+      if (Api.punyaToken) {
+        final cached = await Api.readCache('user');
+        if (cached is Map) {
+          _user = Map<String, dynamic>.from(cached);
+          if (mounted) setState(() => _loading = false);
+          _verifikasi();
+          return;
+        }
+      }
       _user = await Api.me();
     } catch (e) {
       _error = e.toString();
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  // Cek token ke server di latar belakang; kalau ditolak (401), kembali ke login.
+  Future<void> _verifikasi() async {
+    try {
+      final u = await Api.me();
+      if (mounted) setState(() => _user = u);
+    } catch (_) {}
   }
 
   @override
