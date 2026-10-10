@@ -103,23 +103,49 @@ class Api {
     }
   }
 
-  static Future<dynamic> getJson(String path) async {
+  static Future<dynamic> _decode(http.Response r) async {
+    if (r.statusCode == 401) {
+      await _clear();
+      throw ApiError('Sesi berakhir, silakan masuk lagi.');
+    }
+    if (r.statusCode == 422) {
+      try {
+        final d = jsonDecode(r.body);
+        final e = d['errors'];
+        if (e is Map && e.isNotEmpty) {
+          throw ApiError((e.values.first as List).first.toString());
+        }
+      } on ApiError {
+        rethrow;
+      } catch (_) {}
+      throw ApiError('Data tidak valid.');
+    }
+    if (r.statusCode == 404) throw ApiError('Data tidak ditemukan.');
+    if (r.statusCode < 200 || r.statusCode >= 300) {
+      throw ApiError('Server bermasalah (${r.statusCode}).');
+    }
+    return r.body.isEmpty ? null : jsonDecode(r.body);
+  }
+
+  static Future<dynamic> _req(Future<http.Response> Function() kirim) async {
     try {
-      final r = await _client
-          .get(Uri.parse('$baseUrl/api$path'), headers: _headers)
-          .timeout(const Duration(seconds: 20));
-      if (r.statusCode == 401) {
-        await _clear();
-        throw ApiError('Sesi berakhir, silakan masuk lagi.');
-      }
-      if (r.statusCode != 200) throw ApiError('Server bermasalah (${r.statusCode}).');
-      return jsonDecode(r.body);
+      final r = await kirim().timeout(const Duration(seconds: 20));
+      return await _decode(r);
     } on ApiError {
       rethrow;
     } catch (_) {
       throw ApiError('Tidak bisa terhubung ke server.');
     }
   }
+
+  static Future<dynamic> getJson(String path) =>
+      _req(() => _client.get(Uri.parse('$baseUrl/api$path'), headers: _headers));
+
+  static Future<dynamic> postJson(String path, Map<String, dynamic> body) => _req(() =>
+      _client.post(Uri.parse('$baseUrl/api$path'), headers: _headers, body: jsonEncode(body)));
+
+  static Future<dynamic> deleteJson(String path) =>
+      _req(() => _client.delete(Uri.parse('$baseUrl/api$path'), headers: _headers));
 
   static Future<void> logout() async {
     try {
