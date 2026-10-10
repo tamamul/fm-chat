@@ -49,22 +49,30 @@ jobs:
 
           ls -la android/app/src/main/
 
-      - name: Cek konfigurasi Android SDK
+      
+      - name: Atur compileSdk 37
         run: |
-          echo "=== File Gradle ==="
-          find android -maxdepth 4 -type f \( -name '*.gradle' -o -name '*.gradle.kts' -o -name 'gradle-wrapper.properties' \)
+          python3 - <<'PY'
+          from pathlib import Path
 
-          echo "=== Versi compileSdk ==="
-          grep -R -n 'compileSdk' android
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
 
-          echo "=== Paket Android SDK tersedia ==="
+          old = "compileSdk = flutter.compileSdkVersion"
+          new = "compileSdk = 37"
+
+          if old not in s:
+              raise SystemExit("Baris compileSdk tidak ditemukan")
+
+          p.write_text(s.replace(old, new, 1))
+          print("compileSdk berhasil diubah menjadi 37")
+          PY
+
+      - name: Install Android SDK Platform 37
+        run: |
           SDKMANAGER="$(find /usr/local/lib/android/sdk/cmdline-tools -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          "$SDKMANAGER" "platforms;android-37.0"
 
-          if [ -n "$SDKMANAGER" ]; then
-            "$SDKMANAGER" --list | grep -E 'platforms;android-37|platforms;android-36' || true
-          else
-            echo "sdkmanager tidak ditemukan"
-          fi
 
       - name: Atur manifest
         run: |
