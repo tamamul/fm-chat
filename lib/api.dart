@@ -82,4 +82,22 @@ class Api {
     } catch (_) {}
     await _clear();
   }
+
+  static Future<dynamic> getJson(String path) async {
+    try {
+      final r = await http
+          .get(Uri.parse('$baseUrl/api$path'), headers: _headers)
+          .timeout(const Duration(seconds: 20));
+      if (r.statusCode == 401) {
+        await _clear();
+        throw ApiError('Sesi berakhir, silakan masuk lagi.');
+      }
+      if (r.statusCode != 200) throw ApiError('Server bermasalah (${r.statusCode}).');
+      return jsonDecode(r.body);
+    } on ApiError {
+      rethrow;
+    } catch (_) {
+      throw ApiError('Tidak bisa terhubung ke server.');
+    }
+  }
 }
