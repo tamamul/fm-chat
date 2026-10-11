@@ -206,6 +206,18 @@ class Api {
     }
   }
 
+  static Future<void> daftarToken(String token) async {
+    try {
+      await postJson('/device-token', {'token': token});
+    } catch (_) {}
+  }
+
+  static Future<void> hapusToken(String token) async {
+    try {
+      await postJson('/device-token/hapus', {'token': token});
+    } catch (_) {}
+  }
+
   static Future<void> logout() async {
     try {
       await _client
