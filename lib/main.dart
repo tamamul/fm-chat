@@ -4,6 +4,8 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'api.dart';
 import 'chat_list.dart';
 import 'share_page.dart';
+import 'chat_room.dart';
+import 'push.dart';
 
 void main() => runApp(const FmChatApp());
 
@@ -83,6 +85,7 @@ class _GateState extends State<Gate> {
     return HomePage(
       user: _user!,
       onLogout: () async {
+        await Push.lepas();	
         await Api.logout();
         if (mounted) setState(() => _user = null);
       },
@@ -183,10 +186,13 @@ class _HomePageState extends State<HomePage> {
       _diterima(value);
       ReceiveSharingIntent.instance.reset();
     });
+    Push.onBuka = _bukaNotif;
+    Push.mulai();
   }
 
   @override
   void dispose() {
+    Push.onBuka = null;	
     _sub?.cancel();
     super.dispose();
   }
@@ -197,6 +203,18 @@ class _HomePageState extends State<HomePage> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => SharePage(items: items)),
     );
+  }
+  
+  void _bukaNotif(Map<String, dynamic> d) {
+    final id = int.tryParse((d['id'] ?? '').toString());
+    if (id == null || !mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ChatRoomPage(
+        grup: d['grup'] == '1',
+        id: id,
+        nama: (d['nama'] ?? '').toString(),
+      ),
+    ));
   }
 
   @override
