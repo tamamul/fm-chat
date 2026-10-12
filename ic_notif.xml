@@ -1,0 +1,18 @@
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Siluet chat MARSA -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M20,2H4C2.9,2 2,2.9 2,4V18.5C2,19.3 2.9,19.7 3.5,19.1L6,17H20C21.1,17 22,16.1 22,15V4C22,2.9 21.1,2 20,2Z" />
+
+    <!-- Huruf M -->
+    <path
+        android:fillColor="#008B9A"
+        android:pathData="M5,13V6.5C5,5.8 5.8,5.5 6.3,6L12,10.5L17.7,6C18.2,5.5 19,5.8 19,6.5V13H16V9.5L12,12.7L8,9.5V13Z" />
+
+</vector>
