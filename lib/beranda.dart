@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'berkas_page.dart';
 import 'chat_list.dart';
 import 'dibagi_page.dart';
+import 'lokal.dart';
 
 class Beranda extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -14,6 +15,12 @@ class Beranda extends StatefulWidget {
 class _BerandaState extends State<Beranda> {
   int _tab = 0;
   final _dibuka = <int>{0}; // tab dimuat saat pertama kali dibuka
+
+  @override
+  void initState() {
+    super.initState();
+    Lokal.muat();
+  }
 
   @override
   Widget build(BuildContext context) {
