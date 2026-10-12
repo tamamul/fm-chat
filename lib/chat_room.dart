@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'api.dart';
 import 'voice.dart';
+import 'util.dart';
 
 class ChatRoomPage extends StatefulWidget {
   final bool grup;
@@ -297,10 +298,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       _input.clear();
     });
     try {
+      var terakhir = 0.0;
       await Api.uploadFile(_sendPath, path, nama,
-          caption: caption, replyTo: reply == null ? null : reply['id'] as int);
-      await _poll(tunggu: true);
-      if (mounted) setState(() => _pending.remove(temp));
+          caption: caption,
+          replyTo: reply == null ? null : reply['id'] as int,
+          onProgress: (s, t) {
+            if (t <= 0) return;
+            final p = s / t;
+            if (p - terakhir < 0.02 && p < 1) return;
+            terakhir = p;
+            if (mounted) setState(() => temp['progres'] = p);
+          });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -375,23 +383,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     } catch (_) {}
   }
 
-  Future<void> _bukaFile(Map file) async {
-    final url = (file['url'] ?? '').toString();
-    if (url.isEmpty || _membuka) return;
-    _membuka = true;
-    try {
-      _snack('Mengunduh ${file['name']}...');
-      final path = await Api.download(url, file['name'].toString());
-      final r = await OpenFilex.open(path);
-      if (r.type != ResultType.done) {
-        _snack('Tidak ada aplikasi untuk membuka file ini.');
-      }
-    } catch (e) {
-      _snack(e.toString());
-    } finally {
-      _membuka = false;
-    }
-  }
+  
 
   Future<void> _hapus(Map<String, dynamic> m) async {
     final ok = await showDialog<bool>(
@@ -464,17 +456,20 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     return rows.reversed.toList();
   }
 
-  Widget _lampiran(Map file) {
+    Widget _lampiran(Map file, Map<String, dynamic> m) {
     final nama = file['name'].toString();
+    final url = (file['url'] ?? '').toString();
     final detik = VoiceNote.detik(nama);
     if (detik != null) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 2),
-        child: VoiceTile(url: (file['url'] ?? '').toString(), nama: nama, detik: detik),
+        child: VoiceTile(url: url, nama: nama, detik: detik),
       );
     }
+    final pending = m['pending'] == true;
+    final prog = m['progres'];
     return GestureDetector(
-      onTap: () => _bukaFile(file),
+      onTap: pending ? null : () => Unduhan.mulai(context, url, nama),
       child: Container(
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.all(8),
@@ -482,19 +477,34 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           color: const Color(0x0F000000),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.insert_drive_file, size: 28),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nama, maxLines: 2, overflow: TextOverflow.ellipsis),
-                Text(file['size'].toString(), style: const TextStyle(fontSize: 12)),
-              ],
-            ),
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(ikonFile(nama), size: 28),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(nama, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(file['size'].toString(), style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+              if (!pending) ...[const SizedBox(width: 8), StatusUnduh(url: url)],
+            ]),
+            if (pending)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: SizedBox(
+                  width: 180,
+                  child: LinearProgressIndicator(value: prog is double ? prog : null),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -563,7 +573,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 const Text('Pesan dihapus',
                     style: TextStyle(fontStyle: FontStyle.italic, color: Colors.black54))
               else ...[
-                if (file is Map) _lampiran(file),
+                if (file is Map) _lampiran(file, m),
                 if (body.isNotEmpty) Text(body),
               ],
               Align(
