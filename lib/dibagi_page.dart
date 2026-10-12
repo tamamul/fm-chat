@@ -84,6 +84,7 @@ class _DibagiPageState extends State<DibagiPage> {
                     leading: Icon(ikonFile(nama), size: 32),
                     title: Text(nama, maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text('${f['pemilik']} · ${ukuranFile((f['size'] as num).toInt())}'),
+                    trailing: StatusUnduh(url: f['url'].toString()),
                     onTap: () => bukaBerkas(context, f['url'].toString(), nama),
                   );
                 },
