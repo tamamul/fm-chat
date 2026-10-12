@@ -162,6 +162,7 @@ class Api {
     String fileName, {
     String caption = '',
     int? replyTo,
+    Map<String, String>? fields,   // <- parameter baru
   }) async {
     try {
       final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/api$path'));
@@ -169,6 +170,7 @@ class Api {
       if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
       if (caption.isNotEmpty) req.fields['body'] = caption;
       if (replyTo != null) req.fields['reply_to'] = replyTo.toString();
+      if (fields != null) req.fields.addAll(fields);  
       req.files.add(await http.MultipartFile.fromPath('berkas', filePath, filename: fileName));
       final streamed = await _client.send(req).timeout(const Duration(minutes: 5));
       final r = await http.Response.fromStream(streamed);
