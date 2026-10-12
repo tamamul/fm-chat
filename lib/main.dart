@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'api.dart';
-import 'chat_list.dart';
+import 'beranda.dart';
 import 'share_page.dart';
 import 'chat_room.dart';
 import 'push.dart';
@@ -217,7 +217,7 @@ class _HomePageState extends State<HomePage> {
     ));
   }
 
-  @override
+    @override
   Widget build(BuildContext context) =>
-      ChatListPage(user: widget.user, onLogout: widget.onLogout);
+      Beranda(user: widget.user, onLogout: widget.onLogout);
 }
