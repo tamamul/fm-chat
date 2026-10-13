@@ -10,6 +10,7 @@ class Pembatal {
 class Lokal {
   static Directory? _akar;
   static final Set<String> _ada = {};
+  static final Map<String, String> _jalur = {};
   static final ValueNotifier<int> berubah = ValueNotifier(0);
 
   static Future<Directory> akar() async {
@@ -46,8 +47,16 @@ class Lokal {
     try {
       final r = await akar();
       _ada.clear();
+      _jalur.clear();
       for (final e in r.listSync()) {
-        if (e is Directory && _isi(e) != null) _ada.add(e.path.split('/').last);
+        if (e is Directory) {
+          final f = _isi(e);
+          if (f != null) {
+            final k = e.path.split('/').last;
+            _ada.add(k);
+            _jalur[k] = f.path;
+          }
+        }
       }
     } catch (_) {}
     berubah.value++;
@@ -55,13 +64,18 @@ class Lokal {
 
   static bool ada(String urlPath) => _ada.contains(kunci(urlPath));
 
+  // Jalur file lokal tanpa menunggu (null kalau belum diunduh).
+  static String? pathSync(String urlPath) => _jalur[kunci(urlPath)];
+
   static Future<String?> path(String urlPath) async {
     final r = await akar();
     return _isi(Directory('${r.path}/${kunci(urlPath)}'))?.path;
   }
 
-  static void tandai(String urlPath) {
-    _ada.add(kunci(urlPath));
+  static void tandai(String urlPath, String path) {
+    final k = kunci(urlPath);
+    _ada.add(k);
+    _jalur[k] = path;
     berubah.value++;
   }
 
@@ -72,6 +86,7 @@ class Lokal {
       if (await d.exists()) await d.delete(recursive: true);
     } catch (_) {}
     _ada.remove(kunci(urlPath));
+    _jalur.remove(kunci(urlPath));
     berubah.value++;
   }
 
@@ -83,6 +98,7 @@ class Lokal {
       }
     } catch (_) {}
     _ada.clear();
+    _jalur.clear();
     berubah.value++;
   }
 
