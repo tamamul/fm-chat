@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import 'api.dart';
 import 'voice.dart';
 import 'util.dart';
+import 'pratinjau.dart';
 
 class ChatRoomPage extends StatefulWidget {
   final bool grup;
@@ -469,7 +470,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final pending = m['pending'] == true;
     final prog = m['progres'];
     return GestureDetector(
-      onTap: pending ? null : () => Unduhan.mulai(context, url, nama),
+            onTap: pending
+          ? null
+          : () => bukaPintar(
+                context,
+                <Map<String, dynamic>>[{'name': nama, 'url': url}],
+                <String, dynamic>{'name': nama, 'url': url},
+              ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.all(8),
@@ -482,7 +489,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(ikonFile(nama), size: 28),
+              IkonFile(nama: nama, url: url, ukuran: 36),
               const SizedBox(width: 8),
               Flexible(
                 child: Column(
