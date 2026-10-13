@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'lokal.dart';
 import 'util.dart';
+import 'pratinjau.dart';
 
 class DibagiPage extends StatefulWidget {
   final bool aktif;
@@ -132,21 +133,23 @@ class _DibagiPageState extends State<DibagiPage> {
   Widget _barisFile(Map<String, dynamic> f) {
     final nama = f['name'].toString();
     final url = f['url'].toString();
-    return ListTile(
-      leading: Icon(ikonFile(nama), size: 32),
+      return ListTile(
+      leading: IkonFile(nama: nama, url: url, ukuran: 40),
       title: Text(nama, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text('${f['pemilik']} · ${ukuranFile((f['size'] as num).toInt())}'),
-      onTap: () => bukaBerkas(context, url, nama),
+      onTap: () => bukaPintar(context, _list('files'), f),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         StatusUnduh(url: url),
         PopupMenuButton<String>(
-          onSelected: (v) {
-            if (v == 'buka') bukaBerkas(context, url, nama);
+                    onSelected: (v) {
+            if (v == 'buka') bukaPintar(context, _list('files'), f);
+            if (v == 'luar') bukaBerkas(context, url, nama);
             if (v == 'hp') Unduhan.mulai(context, url, nama, buka: false);
             if (v == 'lepas') Lokal.hapus(url);
           },
           itemBuilder: (_) => [
-            const PopupMenuItem(value: 'buka', child: Text('Buka')),
+            const PopupMenuItem(value: 'buka', child: Text('Pratinjau / buka')),
+            const PopupMenuItem(value: 'luar', child: Text('Buka dengan aplikasi lain')),
             if (!Lokal.ada(url)) const PopupMenuItem(value: 'hp', child: Text('Simpan di HP')),
             if (Lokal.ada(url)) const PopupMenuItem(value: 'lepas', child: Text('Hapus dari HP')),
           ],
