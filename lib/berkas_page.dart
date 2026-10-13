@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'api.dart';
 import 'lokal.dart';
 import 'util.dart';
+import 'bagikan_sheet.dart';
 
 const _opsiFilter = [
   ('semua', 'Semua'),
@@ -17,7 +18,8 @@ const _opsiFilter = [
 ];
 
 class BerkasPage extends StatefulWidget {
-  const BerkasPage({super.key});
+  final bool aktif;
+  const BerkasPage({super.key, this.aktif = true});
   @override
   State<BerkasPage> createState() => _BerkasPageState();
 }
@@ -378,7 +380,7 @@ class _BerkasPageState extends State<BerkasPage> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _BagikanSheet(file: it),
+      builder: (_) => BagikanSheet(jenis: it['tipe'] == 'folder' ? 'folder' : 'file', item: it),
     );
     _muat(diam: true);
   }
@@ -572,9 +574,12 @@ class _BerkasPageState extends State<BerkasPage> {
     final info = <String>[];
     if (!folder) {
       info.add(ukuranFile((it['size'] as num).toInt()));
-      final n = (it['penerima'] as List).length;
+      final n = (it['penerima'] as List).length + ((it['grup_dibagi'] ?? 0) as int);
       if (n > 0) info.add('dibagikan ke $n');
       if (it['tautan'] != null) info.add('tautan aktif');
+    } else {
+      final n = (it['dibagi'] ?? 0) as int;
+      if (n > 0) info.add('dibagikan ke $n');
     }
     if (hasil) info.add('di $induk');
 
@@ -592,11 +597,13 @@ class _BerkasPageState extends State<BerkasPage> {
       trailing = Checkbox(value: sel, onChanged: (_) => _toggle(it));
     } else if (folder) {
       trailing = PopupMenuButton<String>(
-        onSelected: (v) {
+                onSelected: (v) {
+          if (v == 'bagi') _bagikan(it);
           if (v == 'nama') _gantiNama(it);
           if (v == 'hapus') _hapusDaftar([], [it['id'] as int]);
         },
         itemBuilder: (_) => const [
+          PopupMenuItem(value: 'bagi', child: Text('Bagikan')),
           PopupMenuItem(value: 'nama', child: Text('Ganti nama')),
           PopupMenuItem(value: 'hapus', child: Text('Hapus')),
         ],
@@ -676,9 +683,9 @@ class _BerkasPageState extends State<BerkasPage> {
     final j = _list('jejak');
     final hasil = _hasilCari != null;
     return PopScope(
-      canPop: _folderId == null && !_modePilih && !_cari,
+    canPop: !widget.aktif || (_folderId == null && !_modePilih && !_cari),
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        if (didPop || !widget.aktif) return;
         if (_modePilih) {
           setState(_pilih.clear);
         } else if (_cari) {
@@ -698,12 +705,7 @@ class _BerkasPageState extends State<BerkasPage> {
   }
 }
 
-class _BagikanSheet extends StatefulWidget {
-  final Map<String, dynamic> file;
-  const _BagikanSheet({required this.file});
-  @override
-  State<_BagikanSheet> createState() => _BagikanSheetState();
-}
+
 
 class _BagikanSheetState extends State<_BagikanSheet> {
   List<Map<String, dynamic>> _users = [];
