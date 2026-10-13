@@ -7,6 +7,7 @@ import 'api.dart';
 import 'lokal.dart';
 import 'util.dart';
 import 'bagikan_sheet.dart';
+import 'pratinjau.dart';
 
 const _opsiFilter = [
   ('semua', 'Semua'),
@@ -223,7 +224,8 @@ class _BerkasPageState extends State<BerkasPage> {
       if (_cari) _tutupCari();
       _masuk(it['id'] as int);
     } else {
-      bukaBerkas(context, it['url'].toString(), it['name'].toString());
+    final files = _tampil().where((e) => e['tipe'] != 'folder').toList();
+      bukaPintar(context, files, it);
     }
   }
 
@@ -589,7 +591,7 @@ class _BerkasPageState extends State<BerkasPage> {
     } else if (folder) {
       leading = const Icon(Icons.folder, size: 36, color: Color(0xFFF2B01E));
     } else {
-      leading = Icon(ikonFile(nama), size: 32);
+      leading = IkonFile(nama: nama, url: url, ukuran: 40);
     }
 
     Widget trailing;
@@ -597,10 +599,11 @@ class _BerkasPageState extends State<BerkasPage> {
       trailing = Checkbox(value: sel, onChanged: (_) => _toggle(it));
     } else if (folder) {
       trailing = PopupMenuButton<String>(
-                onSelected: (v) {
-          if (v == 'bagi') _bagikan(it);
-          if (v == 'nama') _gantiNama(it);
-          if (v == 'hapus') _hapusDaftar([], [it['id'] as int]);
+      	onSelected: (v) {
+      	  if (v == 'buka') {
+              bukaPintar(context, _tampil().where((e) => e['tipe'] != 'folder').toList(), it);
+            }
+            if (v == 'luar') bukaBerkas(context, url, nama);
         },
         itemBuilder: (_) => const [
           PopupMenuItem(value: 'bagi', child: Text('Bagikan')),
@@ -621,7 +624,8 @@ class _BerkasPageState extends State<BerkasPage> {
             if (v == 'hapus') _hapusDaftar([it['id'] as int], []);
           },
           itemBuilder: (_) => [
-            const PopupMenuItem(value: 'buka', child: Text('Buka')),
+            const PopupMenuItem(value: 'buka', child: Text('Pratinjau / buka')),
+            const PopupMenuItem(value: 'luar', child: Text('Buka dengan aplikasi lain')),
             if (!Lokal.ada(url)) const PopupMenuItem(value: 'hp', child: Text('Simpan di HP')),
             if (Lokal.ada(url)) const PopupMenuItem(value: 'lepas', child: Text('Hapus dari HP')),
             const PopupMenuItem(value: 'bagi', child: Text('Bagikan')),
