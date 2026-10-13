@@ -147,3 +147,30 @@ Future<String?> lokalPath(PlatformFile f) async {
     return null;
   }
 }
+
+// Ikon file; untuk gambar yang sudah ada di HP, tampil sebagai ikon mini isinya.
+class IkonFile extends StatelessWidget {
+  final String nama;
+  final String url;
+  final double ukuran;
+  const IkonFile({super.key, required this.nama, required this.url, this.ukuran = 40});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Lokal.pathSync(url);
+    if (p != null && RegExp(r'\.(jpg|jpeg|png|gif|webp|bmp)$').hasMatch(nama.toLowerCase())) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.file(
+          File(p),
+          width: ukuran,
+          height: ukuran,
+          fit: BoxFit.cover,
+          cacheWidth: (ukuran * 3).round(),
+          errorBuilder: (_, __, ___) => Icon(ikonFile(nama), size: ukuran - 8),
+        ),
+      );
+    }
+    return Icon(ikonFile(nama), size: ukuran - 8);
+  }
+}
