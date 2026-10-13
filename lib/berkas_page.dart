@@ -707,29 +707,6 @@ class _BerkasPageState extends State<BerkasPage> {
 
 
 
-class _BagikanSheetState extends State<_BagikanSheet> {
-  List<Map<String, dynamic>> _users = [];
-  late Set<int> _penerima;
-  String? _tautan;
-  bool _loading = true;
-  bool _sibuk = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _penerima = ((widget.file['penerima'] ?? []) as List)
-        .map((e) => ((e as Map)['id'] as num).toInt())
-        .toSet();
-    _tautan = widget.file['tautan'] as String?;
-    _muat();
-  }
-
-  void _snack(String t) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
-  }
-
   Future<void> _muat() async {
     try {
       final u = await Api.getJson('/pengguna') as List;
