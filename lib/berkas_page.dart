@@ -705,7 +705,12 @@ class _BerkasPageState extends State<BerkasPage> {
   }
 }
 
-
+class _BagikanSheet extends StatefulWidget {
+  final Map<String, dynamic> file;
+  const _BagikanSheet({required this.file});
+  @override
+  State<_BagikanSheet> createState() => _BagikanSheetState();
+}
 
 class _BagikanSheetState extends State<_BagikanSheet> {
   List<Map<String, dynamic>> _users = [];
