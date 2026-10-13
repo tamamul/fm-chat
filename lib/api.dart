@@ -226,7 +226,7 @@ class Api {
         rethrow;
       }
       await sementara.rename(akhir.path);
-      Lokal.tandai(urlPath);
+      Lokal.tandai(urlPath, akhir.path);
       return akhir.path;
     } on ApiError {
       rethrow;
