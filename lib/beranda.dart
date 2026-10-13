@@ -27,8 +27,8 @@ class _BerandaState extends State<Beranda> {
     return Scaffold(
       body: IndexedStack(index: _tab, children: [
         ChatListPage(user: widget.user, onLogout: widget.onLogout),
-        _dibuka.contains(1) ? const BerkasPage() : const SizedBox.shrink(),
-        _dibuka.contains(2) ? const DibagiPage() : const SizedBox.shrink(),
+        _dibuka.contains(1) ? BerkasPage(aktif: _tab == 1) : const SizedBox.shrink(),
+        _dibuka.contains(2) ? DibagiPage(aktif: _tab == 2) : const SizedBox.shrink(),
       ]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
