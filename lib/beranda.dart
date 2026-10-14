@@ -3,6 +3,7 @@ import 'berkas_page.dart';
 import 'chat_list.dart';
 import 'dibagi_page.dart';
 import 'lokal.dart';
+import 'tugas_page.dart';
 
 class Beranda extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -29,6 +30,7 @@ class _BerandaState extends State<Beranda> {
         ChatListPage(user: widget.user, onLogout: widget.onLogout),
         _dibuka.contains(1) ? BerkasPage(aktif: _tab == 1) : const SizedBox.shrink(),
         _dibuka.contains(2) ? DibagiPage(aktif: _tab == 2) : const SizedBox.shrink(),
+        _dibuka.contains(3) ? const TugasPage() : const SizedBox.shrink(),
       ]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
@@ -43,6 +45,8 @@ class _BerandaState extends State<Beranda> {
               icon: Icon(Icons.folder_outlined), selectedIcon: Icon(Icons.folder), label: 'Berkas'),
           NavigationDestination(
               icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Dibagi'),
+          NavigationDestination(
+              icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Tugas'),
         ],
       ),
     );
