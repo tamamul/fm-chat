@@ -8,6 +8,8 @@ import 'lokal.dart';
 import 'util.dart';
 import 'bagikan_sheet.dart';
 import 'pratinjau.dart';
+import 'kumpul_status_page.dart';
+import 'waktu.dart';
 
 const _opsiFilter = [
   ('semua', 'Semua'),
@@ -579,9 +581,14 @@ class _BerkasPageState extends State<BerkasPage> {
       final n = (it['penerima'] as List).length + ((it['grup_dibagi'] ?? 0) as int);
       if (n > 0) info.add('dibagikan ke $n');
       if (it['tautan'] != null) info.add('tautan aktif');
-    } else {
+        } else {
       final n = (it['dibagi'] ?? 0) as int;
       if (n > 0) info.add('dibagikan ke $n');
+      final tg = it['tenggat'];
+      if (tg is String) {
+        final t = DateTime.tryParse(tg);
+        if (t != null) info.add('tenggat ${fmtWaktu(t)}');
+      }
     }
     if (hasil) info.add('di $induk');
 
@@ -600,13 +607,18 @@ class _BerkasPageState extends State<BerkasPage> {
     } else if (folder) {
       trailing = PopupMenuButton<String>(
       	onSelected: (v) {
-      	  if (v == 'buka') {
-              bukaPintar(context, _tampil().where((e) => e['tipe'] != 'folder').toList(), it);
-            }
-            if (v == 'luar') bukaBerkas(context, url, nama);
+          if (v == 'bagi') _bagikan(it);
+          if (v == 'kumpul') {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => KumpulStatusPage(folder: it)),
+            );
+          }
+          if (v == 'nama') _gantiNama(it);
+          if (v == 'hapus') _hapusDaftar([], [it['id'] as int]);
         },
         itemBuilder: (_) => const [
           PopupMenuItem(value: 'bagi', child: Text('Bagikan')),
+          PopupMenuItem(value: 'kumpul', child: Text('Lihat pengumpulan')),
           PopupMenuItem(value: 'nama', child: Text('Ganti nama')),
           PopupMenuItem(value: 'hapus', child: Text('Hapus')),
         ],
