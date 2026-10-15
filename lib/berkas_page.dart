@@ -632,6 +632,7 @@ class _BerkasPageState extends State<BerkasPage> {
             if (v == 'hp') Unduhan.mulai(context, url, nama, buka: false);
             if (v == 'lepas') Lokal.hapus(url);
             if (v == 'bagi') _bagikan(it);
+            if (v == 'unduhan') simpanKeUnduhan(context, url, nama);
             if (v == 'nama') _gantiNama(it);
             if (v == 'hapus') _hapusDaftar([it['id'] as int], []);
           },
@@ -641,6 +642,7 @@ class _BerkasPageState extends State<BerkasPage> {
             if (!Lokal.ada(url)) const PopupMenuItem(value: 'hp', child: Text('Simpan di HP')),
             if (Lokal.ada(url)) const PopupMenuItem(value: 'lepas', child: Text('Hapus dari HP')),
             const PopupMenuItem(value: 'bagi', child: Text('Bagikan')),
+            const PopupMenuItem(value: 'unduhan', child: Text('Simpan ke Unduhan')),
             const PopupMenuItem(value: 'nama', child: Text('Ganti nama')),
             const PopupMenuItem(value: 'hapus', child: Text('Hapus')),
           ],
