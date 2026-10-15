@@ -2,13 +2,16 @@ import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'api.dart';
-import 'voice.dart';
-import 'util.dart';
+import 'gambar_chat.dart';
 import 'pratinjau.dart';
+import 'teks_tautan.dart';
+import 'util.dart';
+import 'voice.dart';
 
 class ChatRoomPage extends StatefulWidget {
   final bool grup;
@@ -21,7 +24,10 @@ class ChatRoomPage extends StatefulWidget {
 
 class _ChatRoomPageState extends State<ChatRoomPage> {
   final _input = TextEditingController();
+  final _scroll = ScrollController();
+  final _picker = ImagePicker();
   final AudioRecorder _rec = AudioRecorder();
+  final Map<int, GlobalKey> _kunci = {};
   List<Map<String, dynamic>> _msgs = [];
   final List<Map<String, dynamic>> _pending = [];
   Map<String, dynamic>? _replyTo;
@@ -30,8 +36,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   Timer? _timer;
   Timer? _rekamTimer;
   bool _polling = false;
-  bool _membuka = false;
   bool _merekam = false;
+  bool _adaLama = true;
+  bool _memuatLama = false;
+  bool _tombolBawah = false;
+  int _pesanBaru = 0;
+  int? _sorot;
   int _detikRekam = 0;
   int _tempId = 0;
 
@@ -55,6 +65,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     _init();
   }
 
@@ -62,6 +73,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   void dispose() {
     _timer?.cancel();
     _rekamTimer?.cancel();
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
     _input.dispose();
     VoiceHub.stop();
     if (_merekam) {
@@ -98,6 +111,30 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
+  // ---------- gulir ----------
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final p = _scroll.position;
+    final jauh = p.pixels > 400;
+    if (jauh != _tombolBawah) {
+      setState(() {
+        _tombolBawah = jauh;
+        if (!jauh) _pesanBaru = 0;
+      });
+    }
+    if (_adaLama && !_memuatLama && !_loading && p.pixels >= p.maxScrollExtent - 300) {
+      _muatLama();
+    }
+  }
+
+  void _keBawah() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
+
+  // ---------- memuat pesan ----------
+
   Future<void> _loadFull() async {
     try {
       final data = await Api.getJson(_base);
@@ -105,6 +142,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       if (!mounted) return;
       setState(() {
         _msgs = list;
+        _adaLama = list.length >= 50;
         _tandaiDibaca((data['read_upto'] ?? 0) as int);
         _loading = false;
         _error = null;
@@ -117,6 +155,28 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           if (_msgs.isEmpty) _error = e.toString();
         });
       }
+    }
+  }
+
+  Future<void> _muatLama() async {
+    if (_memuatLama || !_adaLama) return;
+    final ids = _msgs.map((m) => m['id'] as int).where((i) => i > 0);
+    if (ids.isEmpty) return;
+    final pertama = ids.reduce((a, b) => a < b ? a : b);
+    setState(() => _memuatLama = true);
+    try {
+      final data = await Api.getJson('$_base?before=$pertama');
+      final list = _toList(data['messages'] as List);
+      if (!mounted) return;
+      setState(() {
+        final ada = _msgs.map((m) => m['id'] as int).toSet();
+        _msgs = [...list.where((m) => !ada.contains(m['id'] as int)), ..._msgs];
+        _adaLama = list.length >= 50;
+      });
+    } catch (_) {
+      // gagal: akan dicoba lagi saat digulir berikutnya
+    } finally {
+      if (mounted) setState(() => _memuatLama = false);
     }
   }
 
@@ -138,9 +198,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       final dibacaSampai = (data['read_upto'] ?? 0) as int;
       setState(() {
         final ada = _msgs.map((m) => m['id'] as int).toSet();
+        var tambah = 0;
         for (final m in baru) {
-          if (!ada.contains(m['id'] as int)) _msgs.add(m);
+          if (!ada.contains(m['id'] as int)) {
+            _msgs.add(m);
+            if (m['mine'] != true) tambah++;
+          }
         }
+        if (_tombolBawah) _pesanBaru += tambah;
         for (final m in _msgs) {
           final id = m['id'] as int;
           if (dihapus.contains(id)) {
@@ -158,12 +223,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
+  // ---------- pembantu teks ----------
+
   String _cuplikan(Map<String, dynamic> m) {
     if (m['dihapus'] == true) return 'Pesan dihapus';
     final f = m['file'];
     if (f is Map) {
       final nama = f['name'].toString();
       if (VoiceNote.detik(nama) != null) return '\u{1F3A4} Pesan suara';
+      if (jenisPratinjau(nama) == 'gambar') return '\u{1F4F7} Foto';
       return '\u{1F4CE} $nama';
     }
     final b = (m['body'] ?? '').toString().replaceAll('\n', ' ');
@@ -199,6 +267,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(teks)));
   }
+
+  // ---------- kirim ----------
 
   Future<void> _send() async {
     final text = _input.text.trim();
@@ -275,7 +345,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     await _kirimBerkas(path, f.name, bytes, hapusSetelah: path != f.path);
   }
 
-  // Kirim satu file (dari pemilih file atau rekaman suara) dengan gelembung "mengirim".
+  // Kirim satu file (dari pemilih file, kamera, atau rekaman suara) dengan gelembung "mengirim".
   Future<void> _kirimBerkas(String path, String nama, int bytes, {bool hapusSetelah = false}) async {
     final caption = _input.text.trim();
     final reply = _replyTo;
@@ -291,6 +361,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       'dihapus': false,
       'hari': 'Hari ini',
       'file': {'name': nama, 'size': _ukuran(bytes), 'url': ''},
+      'lokal': path,
       'pending': true,
     };
     setState(() {
@@ -310,6 +381,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             terakhir = p;
             if (mounted) setState(() => temp['progres'] = p);
           });
+      await _poll(tunggu: true);
+      if (mounted) setState(() => _pending.remove(temp));
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -327,6 +400,95 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       }
     }
   }
+
+  // ---------- kamera dan galeri ----------
+
+  void _lampirkan() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera),
+            title: const Text('Kamera'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _ambilKamera();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.videocam),
+            title: const Text('Rekam video'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _rekamVideo();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library),
+            title: const Text('Galeri'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _dariGaleri();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.insert_drive_file),
+            title: const Text('Dokumen'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _kirimFile();
+            },
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _ambilKamera() async {
+    try {
+      final x = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2560);
+      if (x != null) await _kirimMedia([x]);
+    } catch (_) {
+      _snack('Kamera tidak bisa dibuka.');
+    }
+  }
+
+  Future<void> _rekamVideo() async {
+    try {
+      final x = await _picker.pickVideo(source: ImageSource.camera, maxDuration: const Duration(minutes: 2));
+      if (x != null) await _kirimMedia([x]);
+    } catch (_) {
+      _snack('Kamera tidak bisa dibuka.');
+    }
+  }
+
+  Future<void> _dariGaleri() async {
+    try {
+      final list = await _picker.pickMultipleMedia(imageQuality: 85, maxWidth: 2560);
+      if (list.isNotEmpty) await _kirimMedia(list);
+    } catch (_) {
+      _snack('Galeri tidak bisa dibuka.');
+    }
+  }
+
+  Future<void> _kirimMedia(List<XFile> daftar) async {
+    var i = 0;
+    for (final x in daftar) {
+      final bytes = await x.length();
+      if (bytes > 100 * 1024 * 1024) {
+        _snack('${x.name}: melebihi 100 MB, dilewati.');
+        continue;
+      }
+      final ext = x.path.contains('.') ? x.path.split('.').last.toLowerCase() : 'jpg';
+      final video = const ['mp4', 'mov', '3gp', 'mkv', 'webm', 'm4v'].contains(ext);
+      final nama = '${video ? 'Video' : 'Foto'}_${_stamp()}${i > 0 ? '_$i' : ''}.$ext';
+      i++;
+      await _kirimBerkas(x.path, nama, bytes, hapusSetelah: true);
+    }
+  }
+
+  // ---------- rekam suara ----------
 
   Future<void> _mulaiRekam() async {
     if (_merekam) return;
@@ -384,7 +546,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     } catch (_) {}
   }
 
-  
+  // ---------- aksi pesan ----------
 
   Future<void> _hapus(Map<String, dynamic> m) async {
     final ok = await showDialog<bool>(
@@ -416,6 +578,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   void _menu(Map<String, dynamic> m) {
     if (m['pending'] == true || m['dihapus'] == true) return;
+    final body = (m['body'] ?? '').toString();
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -428,6 +591,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               setState(() => _replyTo = m);
             },
           ),
+          if (body.isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Salin teks'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(ClipboardData(text: body));
+                _snack('Teks disalin.');
+              },
+            ),
           if (m['file'] is Map)
             ListTile(
               leading: const Icon(Icons.download),
@@ -452,6 +625,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     );
   }
 
+  // ---------- lompat ke pesan balasan ----------
+
   List<Object> _rows() {
     final semua = [..._msgs, ..._pending];
     final rows = <Object>[];
@@ -467,9 +642,59 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     return rows.reversed.toList();
   }
 
-    Widget _lampiran(Map file, Map<String, dynamic> m) {
+  Future<void> _lompatKe(int idPesan) async {
+    var coba = 0;
+    while (!_msgs.any((m) => m['id'] == idPesan) && _adaLama && coba++ < 12) {
+      await _muatLama();
+      if (!mounted) return;
+    }
+    if (!_msgs.any((m) => m['id'] == idPesan)) {
+      _snack('Pesan asli sudah terlalu lama atau sudah dihapus.');
+      return;
+    }
+    await Future.delayed(const Duration(milliseconds: 60));
+    final rows = _rows();
+    final idx = rows.indexWhere((r) => r is Map<String, dynamic> && r['id'] == idPesan);
+    if (idx < 0) return;
+    for (var i = 0; i < 10; i++) {
+      final ctx = _kunci[idPesan]?.currentContext;
+      if (ctx != null) {
+        await Scrollable.ensureVisible(ctx, alignment: 0.4, duration: const Duration(milliseconds: 300));
+        if (mounted) {
+          setState(() => _sorot = idPesan);
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (mounted && _sorot == idPesan) setState(() => _sorot = null);
+          });
+        }
+        return;
+      }
+      if (!_scroll.hasClients) return;
+      final pos = _scroll.position;
+      final bagi = rows.length > 1 ? rows.length - 1 : 1;
+      final target = (pos.maxScrollExtent * idx / bagi).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+      _scroll.jumpTo(target.toDouble());
+      await Future.delayed(const Duration(milliseconds: 60));
+    }
+  }
+
+  // ---------- tampilan ----------
+
+  void _bukaGambar(String url, String nama) {
+    final daftar = <Map<String, dynamic>>[
+      for (final m in _msgs)
+        if (m['file'] is Map && jenisPratinjau((m['file'] as Map)['name'].toString()) == 'gambar')
+          {
+            'name': (m['file'] as Map)['name'].toString(),
+            'url': (m['file'] as Map)['url'].toString(),
+          },
+    ];
+    bukaPintar(context, daftar, {'name': nama, 'url': url});
+  }
+
+  Widget _lampiran(Map file, Map<String, dynamic> m) {
     final nama = file['name'].toString();
     final url = (file['url'] ?? '').toString();
+    final pending = m['pending'] == true;
     final detik = VoiceNote.detik(nama);
     if (detik != null) {
       return Padding(
@@ -477,14 +702,30 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         child: VoiceTile(url: url, nama: nama, detik: detik),
       );
     }
-    final pending = m['pending'] == true;
+    if (jenisPratinjau(nama) == 'gambar') {
+      final prog = m['progres'];
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: GambarChat(
+          url: url,
+          nama: nama,
+          ukuranTeks: file['size'].toString(),
+          lokal: m['lokal'] as String?,
+          pending: pending,
+          progres: prog is double ? prog : null,
+          onTap: () => _bukaGambar(url, nama),
+        ),
+      );
+    }
     final prog = m['progres'];
     return GestureDetector(
-            onTap: pending
+      onTap: pending
           ? null
           : () => bukaPintar(
                 context,
-                <Map<String, dynamic>>[{'name': nama, 'url': url}],
+                <Map<String, dynamic>>[
+                  {'name': nama, 'url': url},
+                ],
                 <String, dynamic>{'name': nama, 'url': url},
               ),
       child: Container(
@@ -527,11 +768,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   }
 
   Widget _bubble(Map<String, dynamic> m) {
+    final id = m['id'] as int;
     final mine = m['mine'] == true;
     final dihapus = m['dihapus'] == true;
     final balas = m['balas'];
     final file = m['file'];
     final body = (m['body'] ?? '').toString();
+    final sorot = _sorot == id;
 
     Widget? centang;
     if (m['pending'] == true) {
@@ -542,66 +785,72 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           : const Icon(Icons.done, size: 14, color: Colors.black45);
     }
 
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onLongPress: () => _menu(m),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-          decoration: BoxDecoration(
-            color: mine ? const Color(0xFFD7EEF7) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 2, offset: Offset(0, 1))],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.grup && !mine)
-                Text(
-                  (m['sender'] ?? 'Pengguna').toString(),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
+    return KeyedSubtree(
+      key: _kunci.putIfAbsent(id, () => GlobalKey()),
+      child: Align(
+        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+        child: GestureDetector(
+          onLongPress: () => _menu(m),
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+            decoration: BoxDecoration(
+              color: sorot ? const Color(0xFFFFF3B0) : (mine ? const Color(0xFFD7EEF7) : Colors.white),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 2, offset: Offset(0, 1))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.grup && !mine)
+                  Text(
+                    (m['sender'] ?? 'Pengguna').toString(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
+                if (balas is Map)
+                  GestureDetector(
+                    onTap: () => _lompatKe((balas['id'] as num).toInt()),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 4),
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                      decoration: const BoxDecoration(
+                        color: Color(0x14000000),
+                        border: Border(left: BorderSide(color: Color(0xFF0B7A9E), width: 3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(balas['nama'].toString(),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text(balas['cuplikan'].toString(),
+                              maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (dihapus)
+                  const Text('Pesan dihapus',
+                      style: TextStyle(fontStyle: FontStyle.italic, color: Colors.black54))
+                else ...[
+                  if (file is Map) _lampiran(file, m),
+                  if (body.isNotEmpty) TeksTautan(body),
+                ],
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text((m['time'] ?? '').toString(),
+                        style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                    if (centang != null) ...[const SizedBox(width: 4), centang],
+                  ]),
                 ),
-              if (balas is Map)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 4),
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                  decoration: const BoxDecoration(
-                    color: Color(0x14000000),
-                    border: Border(left: BorderSide(color: Color(0xFF0B7A9E), width: 3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(balas['nama'].toString(),
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      Text(balas['cuplikan'].toString(),
-                          maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                ),
-              if (dihapus)
-                const Text('Pesan dihapus',
-                    style: TextStyle(fontStyle: FontStyle.italic, color: Colors.black54))
-              else ...[
-                if (file is Map) _lampiran(file, m),
-                if (body.isNotEmpty) Text(body),
               ],
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text((m['time'] ?? '').toString(),
-                      style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                  if (centang != null) ...[const SizedBox(width: 4), centang],
-                ]),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -632,11 +881,25 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
     final rows = _rows();
     if (rows.isEmpty) return const Center(child: Text('Belum ada pesan.'));
+    final adaPenanda = _adaLama || _memuatLama;
     return ListView.builder(
+      controller: _scroll,
       reverse: true,
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: rows.length,
+      itemCount: rows.length + (adaPenanda ? 1 : 0),
       itemBuilder: (context, i) {
+        if (i == rows.length) {
+          return Padding(
+            padding: const EdgeInsets.all(12),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: _memuatLama ? const CircularProgressIndicator(strokeWidth: 2) : null,
+              ),
+            ),
+          );
+        }
         final r = rows[i];
         if (r is String) {
           return Center(
@@ -711,7 +974,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 6, 8, 8),
             child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              IconButton(onPressed: _kirimFile, icon: const Icon(Icons.attach_file)),
+              IconButton(onPressed: _lampirkan, icon: const Icon(Icons.attach_file)),
               Expanded(
                 child: TextField(
                   controller: _input,
@@ -749,7 +1012,25 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       backgroundColor: const Color(0xFFEEF4F8),
       appBar: AppBar(title: Text(widget.nama)),
       body: Column(children: [
-        Expanded(child: _list()),
+        Expanded(
+          child: Stack(children: [
+            Positioned.fill(child: _list()),
+            if (_tombolBawah)
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: FloatingActionButton.small(
+                  heroTag: null,
+                  onPressed: _keBawah,
+                  child: Badge(
+                    isLabelVisible: _pesanBaru > 0,
+                    label: Text('$_pesanBaru'),
+                    child: const Icon(Icons.keyboard_arrow_down),
+                  ),
+                ),
+              ),
+          ]),
+        ),
         _inputBar(),
       ]),
     );
