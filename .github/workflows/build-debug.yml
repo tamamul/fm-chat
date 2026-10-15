@@ -145,7 +145,16 @@ jobs:
                       s,
                       count=1
                   )
-
+          queries = (
+              '<queries>\n'
+              '        <intent><action android:name="android.media.action.IMAGE_CAPTURE"/></intent>\n'
+              '        <intent><action android:name="android.media.action.VIDEO_CAPTURE"/></intent>\n'
+              '        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent>\n'
+              '    </queries>\n    '
+          )
+          if '<queries>' not in s:
+              s = re.sub(r'<application(?=[\s>])', lambda m: queries + '<application', s, count=1)
+              
           s = s.replace(
               'android:launchMode="singleTop"',
               'android:launchMode="singleTask"'
