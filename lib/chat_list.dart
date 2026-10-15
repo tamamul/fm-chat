@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'chat_room.dart';
+import 'lencana.dart';
 
 class ChatListPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -17,6 +18,14 @@ class _ChatListPageState extends State<ChatListPage> {
   String? _error;
   Timer? _timer;
 
+  void _hitungBelum() {
+    var total = 0;
+    for (final e in _items) {
+      total += ((e as Map)['belum'] ?? 0) as int;
+    }
+    Lencana.chat.value = total;
+  }
+  
   @override
   void initState() {
     super.initState();
@@ -38,6 +47,7 @@ class _ChatListPageState extends State<ChatListPage> {
         _items = c;
         _loading = false;
       });
+      _hitungBelum();
     }
   }
 
@@ -57,6 +67,7 @@ class _ChatListPageState extends State<ChatListPage> {
           _error = null;
           _loading = false;
         });
+        _hitungBelum();
       }
     } catch (e) {
       if (mounted) {
