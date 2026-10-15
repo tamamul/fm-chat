@@ -4,6 +4,7 @@ import 'chat_list.dart';
 import 'dibagi_page.dart';
 import 'lokal.dart';
 import 'tugas_page.dart';
+import 'lencana.dart';
 
 class Beranda extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -24,6 +25,12 @@ class _BerandaState extends State<Beranda> {
   }
 
   @override
+  void dispose() {
+    Lencana.chat.value = 0;
+    super.dispose();
+  }
+  
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _tab, children: [
@@ -38,9 +45,19 @@ class _BerandaState extends State<Beranda> {
           _tab = i;
           _dibuka.add(i);
         }),
-        destinations: const [
+        destinations: [
           NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Chat'),
+            icon: ValueListenableBuilder<int>(
+              valueListenable: Lencana.chat,
+              builder: (_, n, __) => Badge(
+                isLabelVisible: n > 0,
+                label: Text(n > 99 ? '99+' : '$n'),
+                child: const Icon(Icons.chat_bubble_outline),
+              ),
+            ),
+            selectedIcon: const Icon(Icons.chat_bubble),
+            label: 'Chat',
+          ),
           NavigationDestination(
               icon: Icon(Icons.folder_outlined), selectedIcon: Icon(Icons.folder), label: 'Berkas'),
           NavigationDestination(
