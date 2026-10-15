@@ -147,6 +147,11 @@ AppBar _barGelap(BuildContext context, String judul, String url, String nama) {
     title: Text(judul, style: const TextStyle(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
     actions: [
       IconButton(
+        icon: const Icon(Icons.download),
+        tooltip: 'Simpan ke Unduhan',
+        onPressed: () => simpanKeUnduhan(context, url, nama),
+      ),
+      IconButton(
         icon: const Icon(Icons.open_in_new),
         tooltip: 'Buka dengan aplikasi lain',
         onPressed: () => bukaBerkas(context, url, nama),
