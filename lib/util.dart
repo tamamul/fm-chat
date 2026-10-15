@@ -5,6 +5,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'api.dart';
 import 'lokal.dart';
+import 'package:flutter/services.dart';
 
 String ukuranFile(int b) {
   if (b >= 1048576) return '${(b / 1048576).toStringAsFixed(1)} MB';
@@ -52,7 +53,8 @@ class Unduhan {
 
   static void batal(String url) => _batal[url]?.batal = true;
 
-  static Future<String?> mulai(BuildContext context, String url, String nama, {bool buka = true}) async {
+  static Future<String?> mulai(BuildContext context, String url, String nama,
+      {bool buka = true, bool diam = false}) async {
     if (sedang(url)) return null;
     final m = ScaffoldMessenger.of(context);
     final p = Pembatal();
@@ -72,7 +74,7 @@ class Unduhan {
         if (r.type != ResultType.done) {
           m.showSnackBar(const SnackBar(content: Text('Tidak ada aplikasi untuk membuka file ini.')));
         }
-      } else {
+          } else if (!diam) {
         m.showSnackBar(SnackBar(content: Text('Tersimpan di HP: $nama')));
       }
       return path;
@@ -172,5 +174,47 @@ class IkonFile extends StatelessWidget {
       );
     }
     return Icon(ikonFile(nama), size: ukuran - 8);
+  }
+}
+const _kanalUnduhan = MethodChannel('fmchat/unduhan');
+
+String mimeDari(String nama) {
+  final e = nama.toLowerCase().split('.').last;
+  const peta = {
+    'pdf': 'application/pdf',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'mp4': 'video/mp4',
+    'mp3': 'audio/mpeg',
+    'm4a': 'audio/mp4',
+    'txt': 'text/plain',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt': 'application/vnd.ms-powerpoint',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'zip': 'application/zip',
+  };
+  return peta[e] ?? 'application/octet-stream';
+}
+
+// Salin file ke folder Unduhan publik (Unduhan/FM Chat). Diunduh dulu bila belum ada di HP.
+Future<void> simpanKeUnduhan(BuildContext context, String url, String nama) async {
+  final m = ScaffoldMessenger.of(context);
+  final path = await Lokal.path(url) ?? await Unduhan.mulai(context, url, nama, buka: false, diam: true);
+  if (path == null) return;
+  try {
+    final lokasi = await _kanalUnduhan.invokeMethod<String>('simpanKeUnduhan', {
+      'path': path,
+      'nama': nama,
+      'mime': mimeDari(nama),
+    });
+    m.showSnackBar(SnackBar(content: Text('Tersimpan di ${lokasi ?? 'Unduhan'}: $nama')));
+  } on PlatformException catch (e) {
+    m.showSnackBar(SnackBar(content: Text('Gagal menyimpan: ${e.message ?? e.code}')));
   }
 }
