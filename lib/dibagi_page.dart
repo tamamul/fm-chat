@@ -144,12 +144,14 @@ class _DibagiPageState extends State<DibagiPage> {
                     onSelected: (v) {
             if (v == 'buka') bukaPintar(context, _list('files'), f);
             if (v == 'luar') bukaBerkas(context, url, nama);
+            if (v == 'unduhan') simpanKeUnduhan(context, url, nama);
             if (v == 'hp') Unduhan.mulai(context, url, nama, buka: false);
             if (v == 'lepas') Lokal.hapus(url);
           },
           itemBuilder: (_) => [
             const PopupMenuItem(value: 'buka', child: Text('Pratinjau / buka')),
             const PopupMenuItem(value: 'luar', child: Text('Buka dengan aplikasi lain')),
+            const PopupMenuItem(value: 'unduhan', child: Text('Simpan ke Unduhan')),
             if (!Lokal.ada(url)) const PopupMenuItem(value: 'hp', child: Text('Simpan di HP')),
             if (Lokal.ada(url)) const PopupMenuItem(value: 'lepas', child: Text('Hapus dari HP')),
           ],
