@@ -428,6 +428,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               setState(() => _replyTo = m);
             },
           ),
+          if (m['file'] is Map)
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Simpan ke Unduhan'),
+              onTap: () {
+                Navigator.pop(ctx);
+                final f = m['file'] as Map;
+                simpanKeUnduhan(context, f['url'].toString(), f['name'].toString());
+              },
+            ),
           if (m['mine'] == true)
             ListTile(
               leading: const Icon(Icons.delete_outline),
